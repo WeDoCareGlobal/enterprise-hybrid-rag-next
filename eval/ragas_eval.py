@@ -8,9 +8,8 @@ Loads test_dataset.json, runs Ragas benchmarks, and asserts:
 
 import json
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-import datasets
 from pydantic import BaseModel, Field
 
 
@@ -186,6 +185,7 @@ def run_ragas_evaluation(
     }
 
     try:
+        import datasets
         # Try to use Ragas
         import ragas
         from ragas import Dataset as RagasDataset
@@ -232,32 +232,15 @@ def run_ragas_evaluation(
         }
 
     except ImportError:
-        print("\nRagas not installed. Running mock evaluation...")
-        print("Install with: pip install ragas")
-
-        # Mock evaluation based on dataset quality
-        mock_faithfulness = 0.975
-        mock_relevancy = 0.965
-
-        faithfulness_pass = mock_faithfulness >= min_faithfulness
-        relevancy_pass = mock_relevancy >= min_answer_relevancy
-        passed = faithfulness_pass and relevancy_pass
-
-        print(f"\nMock Results:")
-        print(f"  Faithfulness:       {mock_faithfulness:.4f} (target: >={min_faithfulness}) {'PASS' if faithfulness_pass else 'FAIL'}")
-        print(f"  Answer Relevancy:   {mock_relevancy:.4f} (target: >={min_answer_relevancy}) {'PASS' if relevancy_pass else 'FAIL'}")
-
         return {
-            "faithfulness": round(mock_faithfulness, 4),
-            "answer_relevancy": round(mock_relevancy, 4),
-            "faithfulness_pass": faithfulness_pass,
-            "relevancy_pass": relevancy_pass,
-            "all_passed": passed,
-            "min_faithfulness_threshold": min_faithfulness,
-            "min_relevancy_threshold": min_answer_relevancy,
-            "samples_evaluated": len(dataset.samples),
-            "dataset_description": dataset.description,
-            "note": "Mock evaluation - Ragas not installed. Install ragas for real evaluation.",
+            "status": "BLOCKED",
+            "error": "evaluation_dependency_unavailable",
+            "faithfulness": None,
+            "answer_relevancy": None,
+            "faithfulness_pass": False,
+            "relevancy_pass": False,
+            "all_passed": False,
+            "samples_evaluated": 0,
         }
 
     except Exception as e:
@@ -291,3 +274,4 @@ if __name__ == "__main__":
         if results.get("relevancy_pass") is False:
             print(f"  - Answer Relevancy {results.get('answer_relevancy')} < {results.get('min_relevancy_threshold')}")
         sys.exit(1)
+

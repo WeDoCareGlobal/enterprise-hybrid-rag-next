@@ -1,7 +1,7 @@
 name: Hybrid RAG regression checks
 on:
   push:
-    branches: [development/rag-integration-20261014]
+    branches: ['development/**']
   pull_request:
 jobs:
   retrieval:
@@ -12,4 +12,5 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install "pydantic>=2.6.4" "rank-bm25>=0.2.2" "qdrant-client>=1.8.2" "pytest>=8,<10"
-      - run: python -m pytest -q tests/test_rrf_contract.py
+      - run: python -m pytest -q tests
+
