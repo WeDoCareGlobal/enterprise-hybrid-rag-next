@@ -192,8 +192,7 @@ class EnterpriseHybridRetriever:
         if embedding_model is not None:
             query_vector = embedding_model.encode(query)
         else:
-            # Placeholder - in production use sentence-transformers
-            query_vector = [0.0] * 768  # Default dimension
+            raise ValueError("embedding_model is required for vector search")
 
         # Search Qdrant
         try:
