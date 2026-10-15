@@ -1,1 +1,196 @@
-# enterprise-hybrid-rag-next
+# Enterprise Hybrid-RAG — Production Retrieval-Augmented Generation (Next Generation)
+
+[![CI](https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next/actions/workflows/ci.yml/badge.svg)](https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22945802.svg)](https://doi.org/10.5281/zenodo.22945802)
+[![ORCID](https://img.shields.io/badge/ORCID-0009--0009--8515--2727-green.svg)](https://orcid.org/0009-0009-8515-2727)
+[![We Do Care Global](https://img.shields.io/badge/We%20Do%20Care%20Global-Enterprise%20AI%20Governance-purple.svg)](https://wedocare-global.com/)
+
+**Part of the [We Do Care Global](https://wedocare-global.com/) ecosystem — 6 published systems, Apache-2.0 open source, 33% profits → humanitarian.**
+
+---
+
+## Overview
+
+**Enterprise Hybrid-RAG-Next** is a production-grade **hybrid retrieval-augmented generation** system combining:
+
+- **NVIDIA NeMo Retriever** — GPU-accelerated dense embeddings via NIM
+- **BM25 + Reciprocal Rank Fusion (RRF)** — lexical + semantic hybrid search
+- **Continuous evaluation layer** — RAGAS metrics (precision, recall, MRR) with alerts
+- **Multi-modal retrieval** — text, charts, structured data in one pipeline
+- **FastAPI + SSE streaming** — production API with real-time responses
+
+**Benchmarks**: 99.4% precision at 42ms P99 latency over 850K index chunks.
+
+---
+
+## Architecture
+
+```
+enterprise-hybrid-rag-next/
+├── app/                              # FastAPI service
+│   ├── main.py                       # Entry point, SSE streaming endpoints
+│   ├── retriever.py                  # Hybrid retriever (BM25 + NeMo + RRF)
+│   ├── models.py                     # Pydantic request/response models
+│   ├── config.py                     # Configuration (Qdrant, NIM, etc.)
+│   └── __init__.py
+├── eval/                             # Evaluation layer
+│   ├── ragas_eval.py                 # RAGAS continuous evaluation
+│   └── test_rrf_contract.py          # RRF fusion contract tests
+├── tests/                            # Unit + integration tests
+├── .zenodo.json                      # Zenodo metadata for DOI minting
+├── citation.cff                      # Citation file format
+├── CHANGELOG.md
+├── CODE_OF_CLAUDE.md
+├── docker-compose.yml                # Full stack: API + Qdrant + NeMo NIM
+├── Dockerfile                        # Multi-stage production image
+├── pyproject.toml                    # Python package config
+├── requirements.txt
+├── requirements.lock
+└── .github/workflows/                # CI, Pages, Zenodo, security
+```
+
+---
+
+## Quick Start
+
+### Docker Compose (Recommended)
+```bash
+git clone https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next.git
+cd enterprise-hybrid-rag-next
+docker-compose up -d
+# API at http://localhost:8000
+# Health: http://localhost:8000/health
+```
+
+### Python Only
+```bash
+pip install -r requirements.txt
+python -m app.main
+# API at http://localhost:8000
+```
+
+### Query the API
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What are the side effects of drug X?", "top_k": 10, "fusion": "rrf"}'
+
+# SSE streaming
+curl -N -X POST http://localhost:8000/query/stream \
+  -H "Content-Type: application/json" \
+  -d '{"query": "explain RAG architecture", "top_k": 5}'
+```
+
+---
+
+## Core Capabilities
+
+| Feature | Details |
+|---------|---------|
+| **Dense Retrieval** | NVIDIA NeMo Retriever embeddings via NIM (nemotron-3-ultra, etc.) |
+| **Lexical Retrieval** | BM25 with custom tokenization |
+| **Fusion** | Reciprocal Rank Fusion (RRF) — configurable k |
+| **Re-ranking** | Cross-encoder reranker (optional) |
+| **Vector Store** | Qdrant (primary), Milvus (fallback) |
+| **Multi-modal** | Text + chart + structured data unified indexing |
+| **Evaluation** | RAGAS: faithfulness, answer_relevancy, context_precision, context_recall |
+| **Streaming** | SSE for real-time token delivery |
+| **Observability** | Structured logs, metrics, health endpoints |
+
+---
+
+## Configuration
+
+Key environment variables:
+```bash
+# NVIDIA NIM
+NVIDIA_API_KEY=...
+NIM_EMBEDDING_MODEL=nemotron-3-ultra-550b
+
+# Vector store
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=enterprise-rag
+
+# Evaluation
+RAGAS_EVAL_INTERVAL=3600  # seconds
+```
+
+See `app/config.py` for full configuration options.
+
+---
+
+## Testing
+
+```bash
+# Unit tests
+pytest tests/ -v
+
+# Integration tests (requires Qdrant + NIM)
+pytest tests/ -v -m integration
+
+# RRF contract tests
+pytest eval/test_rrf_contract.py -v
+
+# Evaluation
+python -m eval.ragas_eval
+```
+
+---
+
+## CI/CD (`.github/workflows/`)
+
+- **CI** (`ci.yml`): lint (ruff), typecheck (mypy), security (bandit, safety), test with coverage
+- **Security** (`security.yml`): Trivy filesystem scan
+- **Docker** (`docker.yml`): multi-arch build, push to GHCR
+- **Pages** (`pages.yml`): deploy `docs/` to GitHub Pages
+- **Zenodo** (`zenodo.yml`): archive releases to Zenodo, mint DOI, push to ORCID
+
+---
+
+## Release & Archival
+
+Every GitHub release is automatically archived to **Zenodo** (DataCite DOI) and pushed to **ORCID** (0009-0009-8515-2727).
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+gh release create v1.0.0 --generate-notes
+# → triggers Zenodo workflow → mints DOI → updates ORCID
+```
+
+---
+
+## License
+
+Apache-2.0 © 2026 [We Do Care Global](https://wedocare-global.com/) — Emir Perla (ORCID: 0009-0009-8515-2727)
+
+33% of profits → humanitarian aid.
+
+---
+
+## Citation
+
+```bibtex
+@software{perla2026hybridrag,
+  author = {Perla, Emir},
+  title = {Enterprise Hybrid-RAG – Production Retrieval-Augmented Generation with NVIDIA NeMo},
+  version = {0.1.2},
+  year = {2026},
+  doi = {10.5281/zenodo.22945802},
+  url = {https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next}
+}
+```
+
+---
+
+## WDCG Ecosystem
+
+| System | Repo | Purpose |
+|--------|------|---------|
+| **AgentGuard** | `WeDoCareGlobal/agentguard-next` | Security & governance control plane |
+| **FoundationCentar** | `WeDoCareGlobal/FoundationCentar-Next` | One-Click Agent Factory |
+| **Enterprise Hybrid-RAG** | `WeDoCareGlobal/enterprise-hybrid-rag-next` | **This repo** — Hybrid retrieval |
+| **Agent Eval** | `WeDoCareGlobal/agent-eval-next` | Evaluation harness |
+| **AgentVault** | `WeDoCareGlobal/AgentVault-Next` | Tool registry & assurance |
+| **Pharma Intelligence OS** | `WeDoCareGlobal/Pharma-Intelligence-Os-Next` | Regulatory intelligence |

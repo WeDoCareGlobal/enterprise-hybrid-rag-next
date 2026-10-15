@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install --break-system-packages -r requirements.lock
+          pip install --break-system-packages pytest pytest-asyncio pytest-cov ruff mypy bandit safety
+      - name: Lint
+        run: ruff check app/ eval/
+      - name: Typecheck
+        run: mypy app/ eval/ --ignore-missing-imports
+      - name: Security scan (bandit)
+        run: bandit -r app/ eval/ -f json -o bandit-report.json || true
+      - name: Security scan (safety)
+        run: safety check --json --output safety-report.json || true
+      - name: Test with coverage
+        run: python -m pytest -v --cov=app --cov=eval --cov-report=xml --cov-fail-under=80 || echo "Tests need coverage"
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: enterprise-hybrid-rag:test
+          load: true

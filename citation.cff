@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+title: "Enterprise Hybrid-RAG – Production Retrieval-Augmented Generation with NVIDIA NeMo"
+message: >-
+  If you use this software, please cite it as below.
+authors:
+  - family-names: "Perla"
+    given-names: "Emir"
+    orcid: "https://orcid.org/0009-0009-8515-2727"
+    affiliation: "We Do Care Global"
+    email: "emirperla96@gmail.com"
+version: "0.1.0"
+date-released: 2026-09-24
+url: "https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next"
+license: "Apache-2.0"
+keywords:
+  - "RAG"
+  - "retrieval-augmented generation"
+  - "NVIDIA NeMo"
+  - "hybrid retrieval"
+  - "evaluation"
+repository-code: "https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next"
