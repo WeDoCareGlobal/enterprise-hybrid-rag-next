@@ -1,0 +1,16 @@
+name: Hybrid RAG regression checks
+on:
+  push:
+    branches: ['development/**']
+  pull_request:
+jobs:
+  retrieval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install "pydantic>=2.6.4" "rank-bm25>=0.2.2" "qdrant-client>=1.8.2" "pytest>=8,<10"
+      - run: python -m pytest -q tests
+
