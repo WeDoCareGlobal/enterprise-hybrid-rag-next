@@ -12,6 +12,7 @@ import asyncio
 import math
 import re
 import threading
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import rank_bm25
@@ -445,53 +446,6 @@ class EnterpriseHybridRetriever:
         # Run both retrieval methods
         bm25_result = self.search_bm25(query, top_k=top_k * 2)
         vector_result = self.search_vector(query, top_k=top_k * 2, embedding_model=embedding_model)
-
-        # Fuse results
-        fused_docs, fused_scores = self.fuse_with_rrf(bm25_result, vector_result)
-
-        total_elapsed_ms = (time.time() - total_start) * 1000
-
-        return HybridRetrievalResult(
-            query=query,
-            documents=fused_docs[:top_k],
-            fused_scores=fused_scores[:top_k],
-            rrf_k=self.rrf_k,
-            bm25_results=bm25_result,
-            vector_results=vector_result,
-            total_execution_time_ms=round(total_elapsed_ms, 2),
-        )
-
-    async def retrieve_async(
-        self,
-        query: str,
-        top_k: int = 10,
-        embedding_model: Optional[Any] = None,
-    ) -> HybridRetrievalResult:
-        """Perform hybrid retrieval with RRF fusion (async).
-
-        Args:
-            query: Search query
-            top_k: Number of final results
-            embedding_model: Optional embedding model for vector search
-
-        Returns:
-            HybridRetrievalResult with fused documents
-        """
-        import time
-
-        total_start = time.time()
-
-        # Run both retrieval methods concurrently
-        bm25_task = asyncio.to_thread(self.search_bm25, query, top_k=top_k * 2)
-        vector_task = asyncio.to_thread(
-            self.search_vector,
-            query,
-            top_k=top_k * 2,
-            embedding_model=embedding_model,
-        )
-
-        bm25_result = await bm25_task
-        vector_result = await vector_task
 
         # Fuse results
         fused_docs, fused_scores = self.fuse_with_rrf(bm25_result, vector_result)

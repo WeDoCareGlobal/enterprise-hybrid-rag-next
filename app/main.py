@@ -260,6 +260,11 @@ async def metrics_middleware(request: Request, call_next):
 # Entry point
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
+def main() -> None:
+    """CLI entry point: run the FastAPI app with uvicorn."""
     import uvicorn
     uvicorn.run(app, host=config.host, port=config.port)
+
+
+if __name__ == "__main__":
+    main()

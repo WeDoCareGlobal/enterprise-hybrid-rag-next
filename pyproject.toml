@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "enterprise-hybrid-rag"
-version = "0.1.1"
+version = "1.0.0-pre.1"
 description = "Production RAG with NVIDIA NeMo retrieval, hybrid dense/lexical search, reranking, and evaluation layer."
 readme = "README.md"
 requires-python = ">=3.11"
