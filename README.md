@@ -1,4 +1,7 @@
-# Enterprise Hybrid-RAG — Production Retrieval-Augmented Generation (Next Generation)
+# Enterprise Hybrid-RAG — Hybrid Retrieval-Augmented Generation (Next Generation)
+
+> **Development status:** This repository is a work in progress. The architecture and examples below are not a certification that every integration is implemented or production-validated. Review the current source, tests and release notes before deployment. Publication DOIs identify their recorded artifacts, not automatically the latest Next commit. See the [portfolio evidence index](https://wedocare-global.com/evidence.html).
+
 
 [![CI](https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next/actions/workflows/ci.yml/badge.svg)](https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -6,21 +9,21 @@
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0009--8515--2727-green.svg)](https://orcid.org/0009-0009-8515-2727)
 [![We Do Care Global](https://img.shields.io/badge/We%20Do%20Care%20Global-Enterprise%20AI%20Governance-purple.svg)](https://wedocare-global.com/)
 
-**Part of the [We Do Care Global](https://wedocare-global.com/) ecosystem — 6 published systems, Apache-2.0 open source, 33% profits → humanitarian.**
+**Part of the [We Do Care Global](https://wedocare-global.com/) ecosystem — 6 published systems, Apache-2.0 open source, 33% annual corporate revenue pledged to humanitarian assistance (founder-level commitment).**
 
 ---
 
 ## Overview
 
-**Enterprise Hybrid-RAG-Next** is a production-grade **hybrid retrieval-augmented generation** system combining:
+**Enterprise Hybrid-RAG-Next** is a development-stage **hybrid retrieval-augmented generation** project exploring the following architecture and integration areas:
 
 - **NVIDIA NeMo Retriever** — GPU-accelerated dense embeddings via NIM
 - **BM25 + Reciprocal Rank Fusion (RRF)** — lexical + semantic hybrid search
 - **Continuous evaluation layer** — RAGAS metrics (precision, recall, MRR) with alerts
 - **Multi-modal retrieval** — text, charts, structured data in one pipeline
-- **FastAPI + SSE streaming** — production API with real-time responses
+- **FastAPI + SSE streaming** — API and streaming integration area; verify current implementation
 
-**Benchmarks**: 99.4% precision at 42ms P99 latency over 850K index chunks.
+**Benchmark status:** No reproducible performance report is asserted here. Publish the tested commit, dataset, hardware, workload, metric definitions and raw results before quoting precision or latency.
 
 ---
 
