@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from prometheus_client import CollectorRegistry, REGISTRY
 
+from app.config import config
 from app.retriever import EnterpriseHybridRetriever
 
 
@@ -67,7 +68,14 @@ def get_retriever() -> EnterpriseHybridRetriever:
     """Get or create the global retriever instance."""
     global retriever
     if retriever is None:
-        retriever = EnterpriseHybridRetriever()
+        retriever = EnterpriseHybridRetriever(
+            qdrant_host=config.qdrant.host,
+            qdrant_port=config.qdrant.port,
+            qdrant_collection=config.qdrant.collection,
+            rrf_k=config.rrf_k,
+            bm25_weight=config.bm25_weight,
+            vector_weight=config.vector_weight,
+        )
     return retriever
 
 
@@ -168,13 +176,23 @@ async def sse_stream_response(
 @app.get("/health")
 async def health_check() -> dict:
     """Health check endpoint."""
-    return get_retriever().health_check()
+    result = get_retriever().health_check()
+    return {
+        "bm25": result["bm25"],
+        "qdrant": result["qdrant"],
+        "nim": result.get("nim", {"enabled": False, "status": "not_configured"}),
+        "overall_status": result["overall_status"],
+    }
 
 
 @app.post("/query", response_model=QueryResponse)
 async def query_rag(request: QueryRequest) -> QueryResponse:
     """Execute hybrid retrieval and return results as JSON."""
-    result = get_retriever().retrieve(query=request.query, top_k=request.top_k)
+    result = await asyncio.to_thread(
+        get_retriever().retrieve,
+        query=request.query,
+        top_k=request.top_k,
+    )
     sources = list(set(d.get("source", "unknown") for d in result.documents))
     return QueryResponse(
         query=result.query,
@@ -244,4 +262,4 @@ async def metrics_middleware(request: Request, call_next):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=config.host, port=config.port)

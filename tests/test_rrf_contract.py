@@ -4,8 +4,11 @@ import inspect
 from unittest.mock import patch
 
 import pytest
-
-from app.retriever import EnterpriseHybridRetriever, RetrievalResult
+from app.retriever import (
+    EnterpriseHybridRetriever,
+    RetrievalResult,
+    EmbeddingError,
+)
 
 
 def result(method, ids):
@@ -32,6 +35,6 @@ def test_rrf_combines_matching_document_ids():
 def test_vector_search_requires_real_embedding():
     with patch("app.retriever.QdrantClient") as client:
         retriever = EnterpriseHybridRetriever()
-        with pytest.raises(ValueError, match="embedding"):
+        with pytest.raises(EmbeddingError, match="embedding"):
             retriever.search_vector("example")
         client.return_value.search.assert_not_called()

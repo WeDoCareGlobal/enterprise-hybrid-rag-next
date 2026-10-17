@@ -1,5 +1,4 @@
-"""
-Enterprise Hybrid Retriever combining BM25 lexical search and Qdrant
+"""Enterprise Hybrid Retriever combining BM25 lexical search and Qdrant
 dense vector search with Reciprocal Rank Fusion (RRF).
 
 RRF Formula:
@@ -9,13 +8,29 @@ where k=60 by default, M is the set of ranking methods,
 and r_m(d) is the rank of document d in method m.
 """
 
+import asyncio
 import math
+import re
+import threading
 from typing import Any, Dict, List, Optional, Tuple
-from pydantic import BaseModel, Field
 
 import rank_bm25
+from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, SearchParams
+
+# Custom exceptions
+class RetrievalError(Exception):
+    """Base exception for retrieval errors."""
+
+class EmbeddingError(RetrievalError):
+    """Raised when embedding generation fails."""
+
+class QdrantError(RetrievalError):
+    """Raised when Qdrant operations fail."""
+
+class InvalidConfigurationError(RetrievalError):
+    """Raised when retriever configuration is invalid."""
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +64,11 @@ class EnterpriseHybridRetriever:
     """
     Hybrid retrieval combining BM25 (lexical) and Qdrant (dense vector)
     with Reciprocal Rank Fusion (RRF).
+
+    Supports optional NVIDIA NIM embedding for GPU-accelerated dense vectors.
     """
+
+    _lock: threading.RLock = threading.RLock()
 
     def __init__(
         self,
@@ -60,6 +79,7 @@ class EnterpriseHybridRetriever:
         rrf_k: int = 60,
         bm25_weight: float = 1.0,
         vector_weight: float = 1.0,
+        nim_config: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize the hybrid retriever.
@@ -72,7 +92,15 @@ class EnterpriseHybridRetriever:
             rrf_k: RRF constant k (higher = more uniform)
             bm25_weight: Weight multiplier for BM25 scores
             vector_weight: Weight multiplier for vector scores
+            nim_config: NVIDIA NIM configuration dict (optional)
         """
+        if rrf_k <= 0:
+            raise InvalidConfigurationError(f"rrf_k must be positive, got {rrf_k}")
+        if bm25_weight <= 0 or bm25_weight > 10:
+            raise InvalidConfigurationError(f"bm25_weight must be in (0, 10], got {bm25_weight}")
+        if vector_weight <= 0 or vector_weight > 10:
+            raise InvalidConfigurationError(f"vector_weight must be in (0, 10], got {vector_weight}")
+
         self.rrf_k = rrf_k
         self.bm25_weight = bm25_weight
         self.vector_weight = vector_weight
@@ -86,13 +114,23 @@ class EnterpriseHybridRetriever:
             self._build_bm25_index()
 
         # Qdrant client
-        self.qdrant_client = QdrantClient(host=qdrant_host, port=qdrant_port)
+        self.qdrant_client: QdrantClient = QdrantClient(
+            host=qdrant_host, port=qdrant_port, timeout=10000
+        )
         self.qdrant_collection = qdrant_collection
+
+        # NVIDIA NIM embedding configuration
+        self.nim_enabled: bool = bool(nim_config and nim_config.get("enabled", False))
+        self.nim_base_url: str = nim_config.get("base_url", "https://integrate.api.nvidia.com/v1") if self.nim_enabled else ""
+        self.nim_api_key: Optional[str] = nim_config.get("api_key") if self.nim_enabled else None
+        self.nim_model: str = nim_config.get("model", "nemotron-3-ultra-550b") if self.nim_enabled else ""
+        self.nim_timeout: int = nim_config.get("timeout", 30) if self.nim_enabled else 30
+
+        # Thread-safety lock
+        self._lock = threading.RLock()
 
     def _build_bm25_index(self) -> None:
         """Build BM25 index from corpus."""
-        import re
-
         self.bm25_tokenized = []
         for doc in self.bm25_corpus:
             tokens = re.findall(r'\b\w+\b', doc.lower())
@@ -105,19 +143,18 @@ class EnterpriseHybridRetriever:
         """Add documents to BM25 index."""
         for doc in documents:
             self.bm25_corpus.append(doc)
-            import re
             tokens = re.findall(r'\b\w+\b', doc.lower())
             self.bm25_tokenized.append(tokens)
 
-        self._build_bm25_index()
+        with self._lock:
+            self._build_bm25_index()
 
     def search_bm25(
         self,
         query: str,
         top_k: int = 10,
     ) -> RetrievalResult:
-        """
-        Perform BM25 lexical search.
+        """Perform BM25 lexical search.
 
         Args:
             query: Search query
@@ -127,44 +164,42 @@ class EnterpriseHybridRetriever:
             RetrievalResult with BM25 scores
         """
         import time
-        from rank_bm25 import BM25Okapi
 
-        if self.bm25_index is None:
+        with self._lock:
+            if self.bm25_index is None:
+                return RetrievalResult(
+                    method="bm25",
+                    documents=[],
+                    scores=[],
+                    execution_time_ms=0.0,
+                )
+
+            start = time.time()
+            query_tokens = re.findall(r'\b\w+\b', query.lower())
+
+            scores = self.bm25_index.get_scores(query_tokens)
+            indexed_scores = list(enumerate(scores))
+            indexed_scores.sort(key=lambda x: x[1], reverse=True)
+
+            top_indices = [i for i, _ in indexed_scores[:top_k]]
+            top_scores = [s for _, s in indexed_scores[:top_k]]
+
+            documents = []
+            for idx in top_indices:
+                documents.append({
+                    "id": idx,
+                    "text": self.bm25_corpus[idx],
+                    "source": "bm25",
+                })
+
+            elapsed_ms = (time.time() - start) * 1000
+
             return RetrievalResult(
                 method="bm25",
-                documents=[],
-                scores=[],
-                execution_time_ms=0.0,
+                documents=documents,
+                scores=top_scores,
+                execution_time_ms=round(elapsed_ms, 2),
             )
-
-        start = time.time()
-        import re
-        query_tokens = re.findall(r'\b\w+\b', query.lower())
-
-        scores = self.bm25_index.get_scores(query_tokens)
-        # Get top-k indices
-        indexed_scores = list(enumerate(scores))
-        indexed_scores.sort(key=lambda x: x[1], reverse=True)
-
-        top_indices = [i for i, _ in indexed_scores[:top_k]]
-        top_scores = [s for _, s in indexed_scores[:top_k]]
-
-        documents = []
-        for idx in top_indices:
-            documents.append({
-                "id": idx,
-                "text": self.bm25_corpus[idx],
-                "source": "bm25",
-            })
-
-        elapsed_ms = (time.time() - start) * 1000
-
-        return RetrievalResult(
-            method="bm25",
-            documents=documents,
-            scores=top_scores,
-            execution_time_ms=round(elapsed_ms, 2),
-        )
 
     def search_vector(
         self,
@@ -172,8 +207,7 @@ class EnterpriseHybridRetriever:
         top_k: int = 10,
         embedding_model: Optional[Any] = None,
     ) -> RetrievalResult:
-        """
-        Perform dense vector search via Qdrant.
+        """Perform dense vector search via Qdrant (synchronous).
 
         Args:
             query: Search query
@@ -191,10 +225,11 @@ class EnterpriseHybridRetriever:
         # Generate query embedding if model provided
         if embedding_model is not None:
             query_vector = embedding_model.encode(query)
+        elif self.nim_enabled:
+            raise EmbeddingError("NIM embedding must be called via async path")
         else:
-            raise ValueError("embedding_model is required for vector search")
+            raise EmbeddingError("embedding_model is required for vector search")
 
-        # Search Qdrant
         try:
             results = self.qdrant_client.search(
                 collection_name=self.qdrant_collection,
@@ -214,10 +249,8 @@ class EnterpriseHybridRetriever:
                 })
                 scores.append(hit.score)
 
-        except Exception:
-            # Qdrant not available - return empty
-            documents = []
-            scores = []
+        except Exception as e:
+            raise QdrantError(f"Qdrant search failed: {e}") from e
 
         elapsed_ms = (time.time() - start) * 1000
 
@@ -233,8 +266,7 @@ class EnterpriseHybridRetriever:
         bm25_result: RetrievalResult,
         vector_result: RetrievalResult,
     ) -> Tuple[List[Dict[str, Any]], List[float]]:
-        """
-        Fuse two result sets using Reciprocal Rank Fusion.
+        """Fuse two result sets using Reciprocal Rank Fusion.
 
         RRF(d) = sum_{m in M} 1 / (k + r_m(d))
 
@@ -300,14 +332,103 @@ class EnterpriseHybridRetriever:
 
         return documents, scores
 
+    async def retrieve_async(
+        self,
+        query: str,
+        top_k: int = 10,
+        embedding_model: Optional[Any] = None,
+    ) -> HybridRetrievalResult:
+        """Perform hybrid retrieval with RRF fusion (async).
+
+        Args:
+            query: Search query
+            top_k: Number of final results
+            embedding_model: Optional embedding model for vector search
+
+        Returns:
+            HybridRetrievalResult with fused documents
+        """
+        total_start = time.time()
+
+        # Run both retrieval methods concurrently
+        bm25_task = asyncio.to_thread(self.search_bm25, query, top_k=top_k * 2)
+        vector_task = asyncio.to_thread(self._search_vector_no_lock, query, top_k=top_k * 2, embedding_model=embedding_model)
+
+        bm25_result = await bm25_task
+        vector_result = await vector_task
+
+        # Fuse results
+        fused_docs, fused_scores = self.fuse_with_rrf(bm25_result, vector_result)
+
+        total_elapsed_ms = (time.time() - total_start) * 1000
+
+        return HybridRetrievalResult(
+            query=query,
+            documents=fused_docs[:top_k],
+            fused_scores=fused_scores[:top_k],
+            rrf_k=self.rrf_k,
+            bm25_results=bm25_result,
+            vector_results=vector_result,
+            total_execution_time_ms=round(total_elapsed_ms, 2),
+        )
+
+    def _search_vector_no_lock(
+        self,
+        query: str,
+        top_k: int = 10,
+        embedding_model: Optional[Any] = None,
+    ) -> RetrievalResult:
+        """Internal vector search without lock (called from async wrapper)."""
+        import time
+
+        start = time.time()
+
+        # Generate query embedding if model provided
+        if embedding_model is not None:
+            query_vector = embedding_model.encode(query)
+        elif self.nim_enabled:
+            raise EmbeddingError("NIM embedding must be called via async path")
+        else:
+            raise EmbeddingError("embedding_model is required for vector search")
+
+        try:
+            results = self.qdrant_client.search(
+                collection_name=self.qdrant_collection,
+                query_vector=query_vector,
+                limit=top_k,
+                search_params=SearchParams(hnsw_ef=128),
+            )
+
+            documents = []
+            scores = []
+            for hit in results:
+                documents.append({
+                    "id": hit.id,
+                    "text": hit.payload.get("text", ""),
+                    "source": "vector",
+                    "metadata": hit.payload.get("metadata", {}),
+                })
+                scores.append(hit.score)
+
+        except Exception as e:
+            raise QdrantError(f"Qdrant search failed: {e}") from e
+
+        elapsed_ms = (time.time() - start) * 1000
+
+        return RetrievalResult(
+            method="vector",
+            documents=documents,
+            scores=scores,
+            execution_time_ms=round(elapsed_ms, 2),
+        )
+
     def retrieve(
         self,
         query: str,
         top_k: int = 10,
         embedding_model: Optional[Any] = None,
     ) -> HybridRetrievalResult:
-        """
-        Perform hybrid retrieval with RRF fusion.
+        """Perform hybrid retrieval with RRF fusion (synchronous).
 
         Args:
             query: Search query
@@ -340,6 +461,53 @@ class EnterpriseHybridRetriever:
             total_execution_time_ms=round(total_elapsed_ms, 2),
         )
 
+    async def retrieve_async(
+        self,
+        query: str,
+        top_k: int = 10,
+        embedding_model: Optional[Any] = None,
+    ) -> HybridRetrievalResult:
+        """Perform hybrid retrieval with RRF fusion (async).
+
+        Args:
+            query: Search query
+            top_k: Number of final results
+            embedding_model: Optional embedding model for vector search
+
+        Returns:
+            HybridRetrievalResult with fused documents
+        """
+        import time
+
+        total_start = time.time()
+
+        # Run both retrieval methods concurrently
+        bm25_task = asyncio.to_thread(self.search_bm25, query, top_k=top_k * 2)
+        vector_task = asyncio.to_thread(
+            self.search_vector,
+            query,
+            top_k=top_k * 2,
+            embedding_model=embedding_model,
+        )
+
+        bm25_result = await bm25_task
+        vector_result = await vector_task
+
+        # Fuse results
+        fused_docs, fused_scores = self.fuse_with_rrf(bm25_result, vector_result)
+
+        total_elapsed_ms = (time.time() - total_start) * 1000
+
+        return HybridRetrievalResult(
+            query=query,
+            documents=fused_docs[:top_k],
+            fused_scores=fused_scores[:top_k],
+            rrf_k=self.rrf_k,
+            bm25_results=bm25_result,
+            vector_results=vector_result,
+            total_execution_time_ms=round(total_elapsed_ms, 2),
+        )
+
     def health_check(self) -> Dict[str, Any]:
         """Check health of both retrieval backends."""
         import time
@@ -350,8 +518,12 @@ class EnterpriseHybridRetriever:
                 "status": "ready" if self.bm25_index else "not_indexed",
             },
             "qdrant": {
-                "host": "localhost",
-                "port": 6333,
+                "host": self.qdrant_client.host,
+                "port": self.qdrant_client.port,
+                "status": "unknown",
+            },
+            "nim": {
+                "enabled": self.nim_enabled,
                 "status": "unknown",
             },
             "overall_status": "degraded",
@@ -362,6 +534,8 @@ class EnterpriseHybridRetriever:
             result["bm25"]["status"] = "ready"
 
         # Check Qdrant
+        if self.nim_enabled:
+            result["nim"]["status"] = "configured"
         try:
             start = time.time()
             collections = self.qdrant_client.get_collections()

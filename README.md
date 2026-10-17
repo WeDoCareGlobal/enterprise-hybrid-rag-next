@@ -105,8 +105,9 @@ curl -N -X POST http://localhost:8000/query/stream \
 Key environment variables:
 ```bash
 # NVIDIA NIM
-NVIDIA_API_KEY=...
+NIM_API_KEY=...
 NIM_EMBEDDING_MODEL=nemotron-3-ultra-550b
+NIM_ENABLED=true
 
 # Vector store
 QDRANT_URL=http://localhost:6333
@@ -114,6 +115,16 @@ QDRANT_COLLECTION=enterprise-rag
 
 # Evaluation
 RAGAS_EVAL_INTERVAL=3600  # seconds
+
+# GPU fraction scheduling (NVIDIA NIM)
+# GPU fractions allow multiple NIMs to share a single GPU (request = guaranteed,
+# limit = burstable). GPU memory swap keeps model weights in CPU when idle,
+# delivering 44-61x faster time-to-first-token vs scale-from-zero.
+GPU_REQUEST=0.5       # Guaranteed minimum GPU fraction
+GPU_LIMIT=1.0         # Burstable GPU fraction limit
+GPU_SWAP=true         # Enable GPU memory swap
+GPU_SWAP_SIZE=80      # Swap size in GB
+GPU_MEMORY_UTILIZATION=0.9  # GPU memory utilization
 ```
 
 See `app/config.py` for full configuration options.
