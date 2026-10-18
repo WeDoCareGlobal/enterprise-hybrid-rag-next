@@ -7,9 +7,10 @@ Loads test_dataset.json, runs Ragas benchmarks, and asserts:
 """
 
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
-import sys
+
 from typing import Any
 
 from pydantic import BaseModel, Field
