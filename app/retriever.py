@@ -314,19 +314,19 @@ class EnterpriseHybridRetriever:
         scores = []
         for doc_id, score in sorted_docs:
             # Find document from either source
-            doc: dict[str, Any] | None = None
+            found_doc: dict[str, Any] | None = None
             for d in bm25_result.documents:
                 if d.get("id") == doc_id:
-                    doc = d
+                    found_doc = d
                     break
-            if doc is None:
+            if found_doc is None:
                 for d in vector_result.documents:
                     if d.get("id") == doc_id:
-                        doc = d
+                        found_doc = d
                         break
 
-            if doc:
-                doc_copy = dict(doc)
+            if found_doc:
+                doc_copy = dict(found_doc)
                 doc_copy["fused_score"] = round(score, 6)
                 documents.append(doc_copy)
                 scores.append(score)
@@ -485,27 +485,28 @@ class EnterpriseHybridRetriever:
 
         # Check BM25
         if self.bm25_index:
-            result["bm25"]["status"] = "ready"
+            result["bm25"]["status"] = "ready"  # type: ignore[index]
 
         # Check Qdrant
         if self.nim_enabled:
-            result["nim"]["status"] = "configured"
+            result["nim"]["status"] = "configured"  # type: ignore[index]
         try:
             start = time.time()
             qdrant_collections = self.qdrant_client.get_collections()
             elapsed = (time.time() - start) * 1000
-            result["qdrant"]["status"] = "connected"
-            result["qdrant"]["response_time_ms"] = round(elapsed, 2)
-            result["qdrant"]["collections"] = [c.name for c in qdrant_collections.collections]
+            result["qdrant"]["status"] = "connected"  # type: ignore[index]
+            result["qdrant"]["response_time_ms"] = round(elapsed, 2)  # type: ignore[index]
+            qdrant_collection_names = [c.name for c in qdrant_collections.collections]  # type: ignore[attr-defined]
+            result["qdrant"]["collections"] = qdrant_collection_names  # type: ignore[index]
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.exception("Qdrant health check error")
-            result["qdrant"]["status"] = f"error: {e!s}"
+            result["qdrant"]["status"] = f"error: {e!s}"  # type: ignore[index]
 
         # Overall status
-        bm25_ok = result["bm25"]["status"] == "ready"
-        qdrant_ok = result["qdrant"]["status"] == "connected"
+        bm25_ok = result["bm25"]["status"] == "ready"  # type: ignore[index]
+        qdrant_ok = result["qdrant"]["status"] == "connected"  # type: ignore[index]
 
         if bm25_ok and qdrant_ok:
             result["overall_status"] = "healthy"
