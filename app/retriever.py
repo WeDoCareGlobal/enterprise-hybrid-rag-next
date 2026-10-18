@@ -9,7 +9,6 @@ and r_m(d) is the rank of document d in method m.
 """
 
 import asyncio
-import math
 import re
 import threading
 import time
@@ -18,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import rank_bm25
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, SearchParams
+from qdrant_client.models import SearchParams
 
 # Custom exceptions
 class RetrievalError(Exception):
