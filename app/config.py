@@ -148,7 +148,7 @@ class AppConfig(BaseModel):
     default_top_k: int = Field(default=10, description="Default number of results")
     max_top_k: int = Field(default=50, description="Maximum number of results")
     # Server configuration
-    host: str = Field(default="0.0.0.0", description="Server host")
+    host: str = Field(default="0.0.0.0", description="Server host")  # nosec: B104 - intentional bind-all for server accessibility
     port: int = Field(default=8000, description="Server port")
 
     @field_validator("rrf_k")
@@ -202,7 +202,7 @@ class AppConfig(BaseModel):
             vector_weight=float(os.environ.get("VECTOR_WEIGHT", "1.0")),
             default_top_k=int(os.environ.get("DEFAULT_TOP_K", "10")),
             max_top_k=int(os.environ.get("MAX_TOP_K", "50")),
-            host=os.environ.get("HOST", "0.0.0.0"),
+            host=os.environ.get("HOST", "0.0.0.0"),  # nosec: B104 - intentional bind-all for server accessibility
             port=int(os.environ.get("PORT", "8000")),
         )
 

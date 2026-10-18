@@ -236,9 +236,9 @@ def run_ragas_evaluation(
             "error": "evaluation_dependency_unavailable",
             "faithfulness": None,
             "answer_relevancy": None,
-            "faithfulness_pass": False,
-            "relevancy_pass": False,
-            "all_passed": False,
+            "faithfulness_pass": False,  # nosec: B105 - boolean config flag, not a password
+            "relevancy_pass": False,  # nosec: B105 - boolean config flag, not a password
+            "all_passed": False,  # nosec: B105 - boolean config flag, not a password
             "samples_evaluated": 0,
         }
 
