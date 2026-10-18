@@ -8,12 +8,10 @@ Loads test_dataset.json, runs Ragas benchmarks, and asserts:
 
 import logging
 import sys
+from typing import Any
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
-
-from typing import Any
-
-from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
 # Pydantic models for dataset
