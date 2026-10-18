@@ -6,7 +6,6 @@ Loads test_dataset.json, runs Ragas benchmarks, and asserts:
 - answer_relevancy >= 0.95
 """
 
-import json
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -187,8 +186,6 @@ def run_ragas_evaluation(
     try:
         import datasets
         # Try to use Ragas
-        import ragas
-        from ragas import Dataset as RagasDataset
         from ragas.metrics import faithfulness, answer_relevancy
         from ragas.evaluation import evaluate
 
