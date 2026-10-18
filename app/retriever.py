@@ -122,10 +122,10 @@ class EnterpriseHybridRetriever:
 
         # NVIDIA NIM embedding configuration
         self.nim_enabled: bool = bool(nim_config and nim_config.get("enabled", False))
-        self.nim_base_url: str = nim_config.get("base_url", "https://integrate.api.nvidia.com/v1") if self.nim_enabled else ""
-        self.nim_api_key: str | None = nim_config.get("api_key") if self.nim_enabled else None
-        self.nim_model: str = nim_config.get("model", "nemotron-3-ultra-550b") if self.nim_enabled else ""
-        self.nim_timeout: int = nim_config.get("timeout", 30) if self.nim_enabled else 30
+        self.nim_base_url: str = nim_config.get("base_url", "https://integrate.api.nvidia.com/v1") if nim_config and self.nim_enabled else ""
+        self.nim_api_key: str | None = nim_config.get("api_key") if nim_config and self.nim_enabled else None
+        self.nim_model: str = nim_config.get("model", "nemotron-3-ultra-550b") if nim_config and self.nim_enabled else ""
+        self.nim_timeout: int = nim_config.get("timeout", 30) if nim_config and self.nim_enabled else 30
 
         # Thread-safety lock
         self._lock = threading.RLock()
@@ -244,9 +244,9 @@ class EnterpriseHybridRetriever:
             for hit in results:
                 documents.append({
                     "id": hit.id,
-                    "text": hit.payload.get("text", ""),
+                    "text": hit.payload.get("text", "") if hit.payload else "",
                     "source": "vector",
-                    "metadata": hit.payload.get("metadata", {}),
+                    "metadata": hit.payload.get("metadata", {}) if hit.payload else {},
                 })
                 scores.append(hit.score)
 
@@ -314,7 +314,7 @@ class EnterpriseHybridRetriever:
         scores = []
         for doc_id, score in sorted_docs:
             # Find document from either source
-            doc = None
+            doc: dict[str, Any] | None = None
             for d in bm25_result.documents:
                 if d.get("id") == doc_id:
                     doc = d
@@ -405,9 +405,9 @@ class EnterpriseHybridRetriever:
             for hit in results:
                 documents.append({
                     "id": hit.id,
-                    "text": hit.payload.get("text", ""),
+                    "text": hit.payload.get("text", "") if hit.payload else "",
                     "source": "vector",
-                    "metadata": hit.payload.get("metadata", {}),
+                    "metadata": hit.payload.get("metadata", {}) if hit.payload else {},
                 })
                 scores.append(hit.score)
 
@@ -472,8 +472,8 @@ class EnterpriseHybridRetriever:
                 "status": "ready" if self.bm25_index else "not_indexed",
             },
             "qdrant": {
-                "host": self.qdrant_client.host,
-                "port": self.qdrant_client.port,
+                "host": getattr(self.qdrant_client, "host", "unknown"),
+                "port": getattr(self.qdrant_client, "port", "unknown"),
                 "status": "unknown",
             },
             "nim": {
@@ -492,16 +492,16 @@ class EnterpriseHybridRetriever:
             result["nim"]["status"] = "configured"
         try:
             start = time.time()
-            collections = self.qdrant_client.get_collections()
+            qdrant_collections = self.qdrant_client.get_collections()
             elapsed = (time.time() - start) * 1000
             result["qdrant"]["status"] = "connected"
             result["qdrant"]["response_time_ms"] = round(elapsed, 2)
-            result["qdrant"]["collections"] = [c.name for c in collections.collections]
+            result["qdrant"]["collections"] = [c.name for c in qdrant_collections.collections]
         except Exception as e:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.exception("Qdrant health check error")
-                    result["qdrant"]["status"] = f"error: {e!s}"
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception("Qdrant health check error")
+            result["qdrant"]["status"] = f"error: {e!s}"
 
         # Overall status
         bm25_ok = result["bm25"]["status"] == "ready"
