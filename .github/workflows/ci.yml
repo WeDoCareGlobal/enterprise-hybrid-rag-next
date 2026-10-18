@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --break-system-packages -r requirements.lock
-          pip install --break-system-packages pytest pytest-asyncio pytest-cov ruff mypy bandit==1.7.0 safety==2.3.0 packaging==21.3
+          pip install --break-system-packages pytest pytest-asyncio pytest-cov ruff mypy bandit==1.7.0 safety==1.10.2 packaging==21.3
       - name: Lint
         run: ruff check app/ eval/
       - name: Typecheck
