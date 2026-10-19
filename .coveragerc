@@ -1,0 +1,7 @@
+[run]
+omit =
+    eval/ragas_eval.py
+
+[report]
+exclude_lines =
+    pragma: no cover
