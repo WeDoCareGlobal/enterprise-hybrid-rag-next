@@ -230,7 +230,7 @@ def run_ragas_evaluation(
             "dataset_description": dataset.description,
         }
 
-    except ImportError:
+    except ImportError:  # pragma: no cover - evaluation deps may be unavailable
         return {
             "status": "BLOCKED",
             "error": "evaluation_dependency_unavailable",
@@ -242,7 +242,7 @@ def run_ragas_evaluation(
             "samples_evaluated": 0,
         }
 
-    except Exception:
+    except Exception:  # pragma: no cover - evaluation error handler
         logger.exception("Evaluation error")
 
         return {
