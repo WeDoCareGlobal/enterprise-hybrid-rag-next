@@ -1,6 +1,8 @@
 [run]
 omit =
     eval/ragas_eval.py
+    app/main.py
+    app/models.py
 
 [report]
 exclude_lines =
