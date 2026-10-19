@@ -13,3 +13,5 @@ mypy==1.10.0
 bandit==1.7.0
 safety==2.3.0
 prometheus-client==0.19.0
+pbr==6.0.0
+packaging==24.1
