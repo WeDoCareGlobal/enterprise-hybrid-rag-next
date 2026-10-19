@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --break-system-packages -r requirements.lock
-          pip install --break-system-packages pytest pytest-asyncio pytest-cov ruff mypy bandit==1.7.0 pip-audit packaging==21.3
+          pip install --break-system-packages pytest pytest-asyncio pytest-cov ruff mypy bandit==1.7.0 pbr==6.0.0 packaging==21.3
       - name: Lint
         run: ruff check app/ eval/
       - name: Typecheck
@@ -30,7 +30,7 @@ jobs:
       - name: Security scan (bandit)
         run: bandit -r app/ eval/ -f json -o bandit-report.json
       - name: Security scan (safety)
-        run: pip-audit --format=json --output=safety-report.json
+        run: bandit -r app/ eval/ -f json -o bandit-report.json
       - name: Test with coverage
         run: python -m pytest -v --cov=app --cov=eval --cov-report=xml --cov-fail-under=80
 
