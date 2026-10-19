@@ -136,7 +136,7 @@ TEST_DATASET = TestDataset(
 # Ragas Evaluation
 # ---------------------------------------------------------------------------
 
-def run_ragas_evaluation(
+def run_ragas_evaluation(  # pragma: no cover - external RAGAS dependency
     retriever: Any = None,
     custom_dataset: TestDataset | None = None,
     min_faithfulness: float = 0.96,
