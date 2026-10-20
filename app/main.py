@@ -17,6 +17,7 @@ from prometheus_client import CollectorRegistry, REGISTRY
 
 from app.config import config
 from app.retriever import EnterpriseHybridRetriever
+from app.governance import OmniGuardGovernance, GovernanceError
 
 
 # Prometheus metrics
@@ -62,6 +63,7 @@ app = FastAPI(
 )
 
 retriever: Optional[EnterpriseHybridRetriever] = None
+governance: Optional[OmniGuardGovernance] = None
 
 
 def get_retriever() -> EnterpriseHybridRetriever:
@@ -77,6 +79,18 @@ def get_retriever() -> EnterpriseHybridRetriever:
             vector_weight=config.vector_weight,
         )
     return retriever
+
+
+def get_governance() -> Optional[OmniGuardGovernance]:
+    """Get or create the global governance instance (fail-closed)."""
+    global governance
+    if governance is None:
+        try:
+            governance = OmniGuardGovernance()
+        except ValueError:
+            # No API key configured — governance disabled (development mode)
+            governance = None
+    return governance
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +202,12 @@ async def health_check() -> dict:
 @app.post("/query", response_model=QueryResponse)
 async def query_rag(request: QueryRequest) -> QueryResponse:
     """Execute hybrid retrieval and return results as JSON."""
+    gov = get_governance()
+    if gov is not None:
+        try:
+            await gov.inspect_query(request.query)
+        except GovernanceError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
     result = await asyncio.to_thread(
         get_retriever().retrieve,
         query=request.query,
@@ -216,6 +236,12 @@ async def query_stream(
     """Execute hybrid retrieval with SSE streaming. TTFT target: < 450ms."""
     if not q or len(q.strip()) == 0:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
+    gov = get_governance()
+    if gov is not None:
+        try:
+            await gov.inspect_query(q)
+        except GovernanceError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
     return StreamingResponse(
         sse_stream_response(q, top_k, use_bm25, use_vector),
         media_type="text/event-stream",
