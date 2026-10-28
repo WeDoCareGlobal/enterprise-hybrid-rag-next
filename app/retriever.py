@@ -316,19 +316,19 @@ class EnterpriseHybridRetriever:
         scores = []
         for doc_id, score in sorted_docs:
             # Find document from either source
-            doc = None
+            matched_doc: Optional[Dict[str, Any]] = None
             for d in bm25_result.documents:
                 if d.get("id") == doc_id:
-                    doc = d
+                    matched_doc = d
                     break
-            if doc is None:
+            if matched_doc is None:
                 for d in vector_result.documents:
                     if d.get("id") == doc_id:
-                        doc = d
+                        matched_doc = d
                         break
 
-            if doc:
-                doc_copy = dict(doc)
+            if matched_doc:
+                doc_copy = dict(matched_doc)
                 doc_copy["fused_score"] = round(score, 6)
                 documents.append(doc_copy)
                 scores.append(score)
