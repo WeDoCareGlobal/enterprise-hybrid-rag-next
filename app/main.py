@@ -19,7 +19,6 @@ from app.retriever import EnterpriseHybridRetriever
 
 
 # Prometheus metrics
-from prometheus_client import REGISTRY
 
 REQUEST_COUNT = Counter("http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"])
 REQUEST_LATENCY = Histogram("http_request_duration_seconds", "HTTP request latency", ["method", "endpoint"])
