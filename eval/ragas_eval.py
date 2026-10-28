@@ -186,8 +186,6 @@ def run_ragas_evaluation(
     try:
         import datasets
         # Try to use Ragas
-        import ragas
-        from ragas import Dataset as RagasDataset
         from ragas.metrics import faithfulness, answer_relevancy
         from ragas.evaluation import evaluate
 
