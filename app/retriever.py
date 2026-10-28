@@ -9,7 +9,6 @@ and r_m(d) is the rank of document d in method m.
 """
 
 import asyncio
-import math
 import re
 import threading
 import time
@@ -18,7 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import rank_bm25
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, SearchParams
+from qdrant_client.models import SearchParams
 
 # Custom exceptions
 class RetrievalError(Exception):
@@ -119,13 +118,16 @@ class EnterpriseHybridRetriever:
             host=qdrant_host, port=qdrant_port, timeout=10000
         )
         self.qdrant_collection = qdrant_collection
+        self.qdrant_host = qdrant_host
+        self.qdrant_port = qdrant_port
 
         # NVIDIA NIM embedding configuration
         self.nim_enabled: bool = bool(nim_config and nim_config.get("enabled", False))
-        self.nim_base_url: str = nim_config.get("base_url", "https://integrate.api.nvidia.com/v1") if self.nim_enabled else ""
-        self.nim_api_key: Optional[str] = nim_config.get("api_key") if self.nim_enabled else None
-        self.nim_model: str = nim_config.get("model", "nemotron-3-ultra-550b") if self.nim_enabled else ""
-        self.nim_timeout: int = nim_config.get("timeout", 30) if self.nim_enabled else 30
+        nim_settings = nim_config or {}
+        self.nim_base_url: str = nim_settings.get("base_url", "https://integrate.api.nvidia.com/v1") if self.nim_enabled else ""
+        self.nim_api_key: Optional[str] = nim_settings.get("api_key") if self.nim_enabled else None
+        self.nim_model: str = nim_settings.get("model", "nemotron-3-ultra-550b") if self.nim_enabled else ""
+        self.nim_timeout: int = nim_settings.get("timeout", 30) if self.nim_enabled else 30
 
         # Thread-safety lock
         self._lock = threading.RLock()
@@ -244,9 +246,9 @@ class EnterpriseHybridRetriever:
             for hit in results:
                 documents.append({
                     "id": hit.id,
-                    "text": hit.payload.get("text", ""),
+                    "text": (hit.payload or {}).get("text", ""),
                     "source": "vector",
-                    "metadata": hit.payload.get("metadata", {}),
+                    "metadata": (hit.payload or {}).get("metadata", {}),
                 })
                 scores.append(hit.score)
 
@@ -314,19 +316,19 @@ class EnterpriseHybridRetriever:
         scores = []
         for doc_id, score in sorted_docs:
             # Find document from either source
-            doc = None
+            matched_doc: Optional[Dict[str, Any]] = None
             for d in bm25_result.documents:
                 if d.get("id") == doc_id:
-                    doc = d
+                    matched_doc = d
                     break
-            if doc is None:
+            if matched_doc is None:
                 for d in vector_result.documents:
                     if d.get("id") == doc_id:
-                        doc = d
+                        matched_doc = d
                         break
 
-            if doc:
-                doc_copy = dict(doc)
+            if matched_doc:
+                doc_copy = dict(matched_doc)
                 doc_copy["fused_score"] = round(score, 6)
                 documents.append(doc_copy)
                 scores.append(score)
@@ -405,9 +407,9 @@ class EnterpriseHybridRetriever:
             for hit in results:
                 documents.append({
                     "id": hit.id,
-                    "text": hit.payload.get("text", ""),
+                    "text": (hit.payload or {}).get("text", ""),
                     "source": "vector",
-                    "metadata": hit.payload.get("metadata", {}),
+                    "metadata": (hit.payload or {}).get("metadata", {}),
                 })
                 scores.append(hit.score)
 
@@ -466,14 +468,14 @@ class EnterpriseHybridRetriever:
         """Check health of both retrieval backends."""
         import time
 
-        result = {
+        result: Dict[str, Any] = {
             "bm25": {
                 "indexed_documents": len(self.bm25_corpus),
                 "status": "ready" if self.bm25_index else "not_indexed",
             },
             "qdrant": {
-                "host": self.qdrant_client.host,
-                "port": self.qdrant_client.port,
+                "host": self.qdrant_host,
+                "port": self.qdrant_port,
                 "status": "unknown",
             },
             "nim": {
