@@ -1,6 +1,6 @@
 """Enterprise Hybrid RAG - Evaluation Module."""
 
-from eval.ragas_eval import run_ragas_evaluation, TEST_DATASET
+from eval.ragas_eval import TEST_DATASET, run_ragas_evaluation
 
-__all__ = ["run_ragas_evaluation", "TEST_DATASET"]
+__all__ = ["TEST_DATASET", "run_ragas_evaluation"]
 

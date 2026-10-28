@@ -7,20 +7,17 @@ Server-Sent Events (SSE) with time-to-first-token under 450ms.
 import asyncio
 import json
 import time
-from typing import AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Query, Response, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, Field
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from prometheus_client import CollectorRegistry, REGISTRY
 
 from app.config import config
 from app.retriever import EnterpriseHybridRetriever
 
-
 # Prometheus metrics
-from prometheus_client import REGISTRY
 
 REQUEST_COUNT = Counter("http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"])
 REQUEST_LATENCY = Histogram("http_request_duration_seconds", "HTTP request latency", ["method", "endpoint"])
@@ -46,8 +43,8 @@ class QueryResponse(BaseModel):
     fused_scores: list
     rrf_k: int
     total_time_ms: float
-    bm25_time_ms: Optional[float] = None
-    vector_time_ms: Optional[float] = None
+    bm25_time_ms: float | None = None
+    vector_time_ms: float | None = None
     sources: list = Field(default_factory=list)
 
 
@@ -61,7 +58,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-retriever: Optional[EnterpriseHybridRetriever] = None
+retriever: EnterpriseHybridRetriever | None = None
 
 
 def get_retriever() -> EnterpriseHybridRetriever:
@@ -151,7 +148,7 @@ async def sse_stream_response(
     await asyncio.sleep(0.01)
 
     # Event 5: Final result
-    sources = list(set(d.get("source", "unknown") for d in fused_docs))
+    sources = list({d.get("source", "unknown") for d in fused_docs})
     result_data = {
         "query": query,
         "documents": fused_docs[:top_k],
@@ -193,7 +190,7 @@ async def query_rag(request: QueryRequest) -> QueryResponse:
         query=request.query,
         top_k=request.top_k,
     )
-    sources = list(set(d.get("source", "unknown") for d in result.documents))
+    sources = list({d.get("source", "unknown") for d in result.documents})
     return QueryResponse(
         query=result.query,
         documents=result.documents,
