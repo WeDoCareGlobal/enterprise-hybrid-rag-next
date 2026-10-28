@@ -316,7 +316,7 @@ class EnterpriseHybridRetriever:
         scores = []
         for doc_id, score in sorted_docs:
             # Find document from either source
-            doc: Optional[Dict[str, Any]] = None
+            doc = None
             for d in bm25_result.documents:
                 if d.get("id") == doc_id:
                     doc = d
