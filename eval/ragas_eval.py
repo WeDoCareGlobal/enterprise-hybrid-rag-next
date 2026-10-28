@@ -6,7 +6,6 @@ Loads test_dataset.json, runs Ragas benchmarks, and asserts:
 - answer_relevancy >= 0.95
 """
 
-import json
 import sys
 from typing import Any, Dict, List, Optional
 
