@@ -13,7 +13,6 @@ from fastapi import FastAPI, HTTPException, Query, Response, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from prometheus_client import CollectorRegistry, REGISTRY
 
 from app.config import config
 from app.retriever import EnterpriseHybridRetriever
