@@ -29,10 +29,21 @@ jobs:
         run: mypy app/ eval/ --ignore-missing-imports
       - name: Security scan (bandit)
         run: bandit -r app/ eval/ -f json -o bandit-report.json
-      - name: Security scan (safety)
-        run: bandit -r app/ eval/ -f json -o bandit-report.json
       - name: Test with coverage
         run: python -m pytest -v --cov=app --cov=eval --cov-report=xml --cov-fail-under=80
+
+  dependency-audit:
+    name: Audit locked Python dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependency auditor
+        run: python -m pip install pip-audit
+      - name: Enforce vulnerability audit
+        run: python -m pip_audit -r requirements.lock
 
   security:
     runs-on: ubuntu-latest
