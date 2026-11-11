@@ -5,7 +5,7 @@ Request/response schemas for FastAPI endpoints.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -34,13 +34,13 @@ class QueryResponse(BaseModel):
     """Response schema for the /query endpoint."""
 
     query: str
-    documents: List[Dict[str, Any]]
-    fused_scores: List[float]
+    documents: list[dict[str, Any]]
+    fused_scores: list[float]
     rrf_k: int
     total_time_ms: float
-    bm25_time_ms: Optional[float] = None
-    vector_time_ms: Optional[float] = None
-    sources: List[str] = Field(default_factory=list)
+    bm25_time_ms: float | None = None
+    vector_time_ms: float | None = None
+    sources: list[str] = Field(default_factory=list)
 
     class Config:
         frozen = True
@@ -70,7 +70,7 @@ class StreamQueryResponse(BaseModel):
     """Response schema for SSE stream events (internal use)."""
 
     event: str
-    data: Dict[str, Any]
+    data: dict[str, Any]
 
     class Config:
         frozen = True
@@ -79,9 +79,9 @@ class StreamQueryResponse(BaseModel):
 class HealthResponse(BaseModel):
     """Health check response schema."""
 
-    bm25: Dict[str, Any] = Field(default_factory=dict)
-    qdrant: Dict[str, Any] = Field(default_factory=dict)
-    nim: Dict[str, Any] = Field(default_factory=dict)
+    bm25: dict[str, Any] = Field(default_factory=dict)
+    qdrant: dict[str, Any] = Field(default_factory=dict)
+    nim: dict[str, Any] = Field(default_factory=dict)
     overall_status: str = Field(default="unknown", description="overall_status")
 
     class Config:

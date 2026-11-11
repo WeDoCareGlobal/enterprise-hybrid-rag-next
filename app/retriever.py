@@ -12,12 +12,13 @@ import asyncio
 import re
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import rank_bm25
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from qdrant_client.models import SearchParams
+
 
 # Custom exceptions
 class RetrievalError(Exception):
@@ -40,19 +41,19 @@ class InvalidConfigurationError(RetrievalError):
 class RetrievalResult(BaseModel):
     """Result of a single retrieval method."""
     method: str
-    documents: List[Dict[str, Any]]
-    scores: List[float]
+    documents: list[dict[str, Any]]
+    scores: list[float]
     execution_time_ms: float
 
 
 class HybridRetrievalResult(BaseModel):
     """Combined result from hybrid retrieval."""
     query: str
-    documents: List[Dict[str, Any]]
-    fused_scores: List[float]
+    documents: list[dict[str, Any]]
+    fused_scores: list[float]
     rrf_k: int = Field(default=60)
-    bm25_results: Optional[RetrievalResult] = None
-    vector_results: Optional[RetrievalResult] = None
+    bm25_results: RetrievalResult | None = None
+    vector_results: RetrievalResult | None = None
     total_execution_time_ms: float
 
 
@@ -72,14 +73,14 @@ class EnterpriseHybridRetriever:
 
     def __init__(
         self,
-        bm25_corpus: Optional[List[str]] = None,
+        bm25_corpus: list[str] | None = None,
         qdrant_host: str = "localhost",
         qdrant_port: int = 6333,
         qdrant_collection: str = "enterprise_documents",
         rrf_k: int = 60,
         bm25_weight: float = 1.0,
         vector_weight: float = 1.0,
-        nim_config: Optional[Dict[str, Any]] = None,
+        nim_config: dict[str, Any] | None = None,
     ):
         """
         Initialize the hybrid retriever.
@@ -106,9 +107,9 @@ class EnterpriseHybridRetriever:
         self.vector_weight = vector_weight
 
         # BM25 index
-        self.bm25_corpus: List[str] = bm25_corpus or []
-        self.bm25_tokenized: List[List[str]] = []
-        self.bm25_index: Optional[rank_bm25.BM25Okapi] = None
+        self.bm25_corpus: list[str] = bm25_corpus or []
+        self.bm25_tokenized: list[list[str]] = []
+        self.bm25_index: rank_bm25.BM25Okapi | None = None
 
         if self.bm25_corpus:
             self._build_bm25_index()
@@ -142,7 +143,7 @@ class EnterpriseHybridRetriever:
         if self.bm25_tokenized:
             self.bm25_index = rank_bm25.BM25Okapi(self.bm25_tokenized)
 
-    def add_bm25_documents(self, documents: List[str]) -> None:
+    def add_bm25_documents(self, documents: list[str]) -> None:
         """Add documents to BM25 index."""
         for doc in documents:
             self.bm25_corpus.append(doc)
@@ -208,7 +209,7 @@ class EnterpriseHybridRetriever:
         self,
         query: str,
         top_k: int = 10,
-        embedding_model: Optional[Any] = None,
+        embedding_model: Any | None = None,
     ) -> RetrievalResult:
         """Perform dense vector search via Qdrant (synchronous).
 
@@ -268,7 +269,7 @@ class EnterpriseHybridRetriever:
         self,
         bm25_result: RetrievalResult,
         vector_result: RetrievalResult,
-    ) -> Tuple[List[Dict[str, Any]], List[float]]:
+    ) -> tuple[list[dict[str, Any]], list[float]]:
         """Fuse two result sets using Reciprocal Rank Fusion.
 
         RRF(d) = sum_{m in M} 1 / (k + r_m(d))
@@ -283,12 +284,12 @@ class EnterpriseHybridRetriever:
         k = self.rrf_k
 
         # Build rank dictionaries
-        bm25_ranks: Dict[int, int] = {}
+        bm25_ranks: dict[int, int] = {}
         for rank, doc in enumerate(bm25_result.documents):
             doc_id = doc.get("id", rank)
             bm25_ranks[doc_id] = rank + 1  # 1-indexed ranks
 
-        vector_ranks: Dict[int, int] = {}
+        vector_ranks: dict[int, int] = {}
         for rank, doc in enumerate(vector_result.documents):
             doc_id = doc.get("id", rank)
             vector_ranks[doc_id] = rank + 1
@@ -297,7 +298,7 @@ class EnterpriseHybridRetriever:
         all_ids = set(bm25_ranks.keys()) | set(vector_ranks.keys())
 
         # Calculate RRF scores
-        fused_scores: Dict[int, float] = {}
+        fused_scores: dict[int, float] = {}
         for doc_id in all_ids:
             rrf_score = 0.0
 
@@ -339,7 +340,7 @@ class EnterpriseHybridRetriever:
         self,
         query: str,
         top_k: int = 10,
-        embedding_model: Optional[Any] = None,
+        embedding_model: Any | None = None,
     ) -> HybridRetrievalResult:
         """Perform hybrid retrieval with RRF fusion (async).
 
@@ -379,7 +380,7 @@ class EnterpriseHybridRetriever:
         self,
         query: str,
         top_k: int = 10,
-        embedding_model: Optional[Any] = None,
+        embedding_model: Any | None = None,
     ) -> RetrievalResult:
         """Internal vector search without lock (called from async wrapper)."""
         import time
@@ -429,7 +430,7 @@ class EnterpriseHybridRetriever:
         self,
         query: str,
         top_k: int = 10,
-        embedding_model: Optional[Any] = None,
+        embedding_model: Any | None = None,
     ) -> HybridRetrievalResult:
         """Perform hybrid retrieval with RRF fusion (synchronous).
 
@@ -464,7 +465,7 @@ class EnterpriseHybridRetriever:
             total_execution_time_ms=round(total_elapsed_ms, 2),
         )
 
-    def health_check(self) -> Dict[str, Any]:
+    def health_check(self) -> dict[str, Any]:
         """Check health of both retrieval backends."""
         import time
 
@@ -487,24 +488,28 @@ class EnterpriseHybridRetriever:
 
         # Check BM25
         if self.bm25_index:
-            result["bm25"]["status"] = "ready"
+            result["bm25"]["status"] = "ready"  # type: ignore[index]
 
         # Check Qdrant
         if self.nim_enabled:
-            result["nim"]["status"] = "configured"
+            result["nim"]["status"] = "configured"  # type: ignore[index]
         try:
             start = time.time()
-            collections = self.qdrant_client.get_collections()
+            qdrant_collections = self.qdrant_client.get_collections()
             elapsed = (time.time() - start) * 1000
-            result["qdrant"]["status"] = "connected"
-            result["qdrant"]["response_time_ms"] = round(elapsed, 2)
-            result["qdrant"]["collections"] = [c.name for c in collections.collections]
+            result["qdrant"]["status"] = "connected"  # type: ignore[index]
+            result["qdrant"]["response_time_ms"] = round(elapsed, 2)  # type: ignore[index]
+            qdrant_collection_names = [c.name for c in qdrant_collections.collections]  # type: ignore[attr-defined]
+            result["qdrant"]["collections"] = qdrant_collection_names  # type: ignore[index]
         except Exception as e:
-            result["qdrant"]["status"] = f"error: {str(e)}"
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception("Qdrant health check error")
+            result["qdrant"]["status"] = f"error: {e!s}"  # type: ignore[index]
 
         # Overall status
-        bm25_ok = result["bm25"]["status"] == "ready"
-        qdrant_ok = result["qdrant"]["status"] == "connected"
+        bm25_ok = result["bm25"]["status"] == "ready"  # type: ignore[index]
+        qdrant_ok = result["qdrant"]["status"] == "connected"  # type: ignore[index]
 
         if bm25_ok and qdrant_ok:
             result["overall_status"] = "healthy"
@@ -521,7 +526,7 @@ class EnterpriseHybridRetriever:
 # ---------------------------------------------------------------------------
 
 def create_retriever(
-    corpus: Optional[List[str]] = None,
+    corpus: list[str] | None = None,
     qdrant_host: str = "localhost",
     qdrant_port: int = 6333,
 ) -> EnterpriseHybridRetriever:

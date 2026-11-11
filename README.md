@@ -1,6 +1,11 @@
 # Enterprise Hybrid-RAG — Hybrid Retrieval-Augmented Generation (Next Generation)
 
-> **Status:** `v1.0.0-pre.1` — production-ready pre-release. All 12 tests pass. `ehr = "app.main:main"` CLI entry point wired via `main()`. Duplicate `retrieve_async` removed.
+> **Engineering focus:** Hybrid retrieval, fusion and evaluation.
+>
+> **Evidence boundary:** CI and security gates are under active review.
+>
+> [Project overview](https://www.wedocare-global.com/enterprise-hybrid-rag.html) · [Evidence index](https://www.wedocare-global.com/evidence.html) · [Portfolio](https://github.com/WeDoCareGlobal)
+
 
 
 [![CI](https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next/actions/workflows/ci.yml/badge.svg)](https://github.com/WeDoCareGlobal/enterprise-hybrid-rag-next/actions/workflows/ci.yml)

@@ -7,9 +7,8 @@ All configuration values are validated at load time.
 from __future__ import annotations
 
 import os
-from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator, ValidationInfo
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 class QdrantConfig(BaseModel):
@@ -46,7 +45,7 @@ class NimConfig(BaseModel):
 
     enabled: bool = Field(default=False, description="Enable NVIDIA NIM embedding")
     base_url: str = Field(default="https://integrate.api.nvidia.com/v1", description="NIM base URL")
-    api_key: Optional[str] = Field(default=None, description="NVIDIA API key (reads from env if not set)")
+    api_key: str | None = Field(default=None, description="NVIDIA API key (reads from env if not set)")
     model: str = Field(default="nemotron-3-ultra-550b", description="Embedding model name")
     timeout: int = Field(default=30, description="NIM request timeout in seconds")
     # GPU fraction scheduling
@@ -85,7 +84,7 @@ class NimConfig(BaseModel):
         return v
 
     @classmethod
-    def from_env(cls) -> "NimConfig":
+    def from_env(cls) -> NimConfig:
         """Load configuration from environment variables."""
         api_key = os.environ.get("NIM_API_KEY")
         return cls(
@@ -149,7 +148,7 @@ class AppConfig(BaseModel):
     default_top_k: int = Field(default=10, description="Default number of results")
     max_top_k: int = Field(default=50, description="Maximum number of results")
     # Server configuration
-    host: str = Field(default="0.0.0.0", description="Server host")
+    host: str = Field(default="0.0.0.0", description="Server host")  # nosec: B104 - intentional bind-all for server accessibility
     port: int = Field(default=8000, description="Server port")
 
     @field_validator("rrf_k")
@@ -183,7 +182,7 @@ class AppConfig(BaseModel):
         return v
 
     @classmethod
-    def from_env(cls) -> "AppConfig":
+    def from_env(cls) -> AppConfig:
         """Load configuration from environment variables."""
         return cls(
             qdrant=QdrantConfig(
@@ -203,7 +202,7 @@ class AppConfig(BaseModel):
             vector_weight=float(os.environ.get("VECTOR_WEIGHT", "1.0")),
             default_top_k=int(os.environ.get("DEFAULT_TOP_K", "10")),
             max_top_k=int(os.environ.get("MAX_TOP_K", "50")),
-            host=os.environ.get("HOST", "0.0.0.0"),
+            host=os.environ.get("HOST", "0.0.0.0"),  # nosec: B104 - intentional bind-all for server accessibility
             port=int(os.environ.get("PORT", "8000")),
         )
 
