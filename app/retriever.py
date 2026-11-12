@@ -12,7 +12,7 @@ import asyncio
 import re
 import threading
 import time
-from typing import Any
+from typing import Any, Dict, Optional
 
 import rank_bm25
 from pydantic import BaseModel, Field
