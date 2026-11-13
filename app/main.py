@@ -8,6 +8,7 @@ import asyncio
 import json
 import time
 from collections.abc import AsyncGenerator
+from typing import Any, Optional
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
@@ -16,7 +17,9 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from pydantic import BaseModel, Field
 
 from app.config import config
+from app.corrective_rag import CorrectiveRAG
 from app.retriever import EnterpriseHybridRetriever
+from app.redaction import get_redaction_engine
 from app.governance import OmniGuardGovernance, GovernanceError
 
 # Prometheus metrics
@@ -37,6 +40,23 @@ class QueryRequest(BaseModel):
     top_k: int = Field(default=10, ge=1, le=50)
     use_vector: bool = Field(default=True)
     use_bm25: bool = Field(default=True)
+    redact: bool = Field(default=True, description="Apply PII/PHI redaction to returned documents")
+
+
+class AgenticQueryRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
+    top_k: int = Field(default=10, ge=1, le=50)
+    redact: bool = Field(default=True, description="Apply PII/PHI redaction to returned documents")
+
+
+class IngestDocument(BaseModel):
+    id: str | int | None = Field(default=None, description="Document id")
+    text: str = Field(..., min_length=1, description="Document text to index")
+    metadata: dict[str, Any] | None = Field(default_factory=dict, description="Document metadata")
+
+
+class IngestRequest(BaseModel):
+    documents: list[IngestDocument] = Field(..., min_length=1, description="Documents to ingest")
 
 
 class QueryResponse(BaseModel):
@@ -62,6 +82,7 @@ app = FastAPI(
 
 retriever: Optional[EnterpriseHybridRetriever] = None
 governance: Optional[OmniGuardGovernance] = None
+agentic: Optional[CorrectiveRAG] = None
 
 
 def get_retriever() -> EnterpriseHybridRetriever:
@@ -89,6 +110,20 @@ def get_governance() -> Optional[OmniGuardGovernance]:
             # No API key configured — governance disabled (development mode)
             governance = None
     return governance
+
+
+def get_agentic() -> CorrectiveRAG:
+    """Get or create the agentic Corrective-RAG pipeline."""
+    global agentic
+    if agentic is None:
+        retriever = get_retriever()
+        agentic = CorrectiveRAG(
+            retriever,
+            max_iterations=config.corrective_rag.max_iterations,
+            relevance_threshold=config.corrective_rag.relevance_threshold,
+            min_documents=config.corrective_rag.min_documents,
+        )
+    return agentic
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +188,9 @@ async def sse_stream_response(
         fused_docs = []
         fused_scores = []
 
+    # Retrieval-layer redaction before documents leave the service.
+    fused_docs = [get_redaction_engine().redact_document(d) for d in fused_docs]
+
     fusion_time = (time.time() - start) * 1000
     total_time = bm25_time + vector_time + fusion_time if (use_bm25 or use_vector) else fusion_time
     yield _make_event("fused", {
@@ -211,6 +249,9 @@ async def query_rag(request: QueryRequest) -> QueryResponse:
         query=request.query,
         top_k=request.top_k,
     )
+    if request.redact:
+        engine = get_redaction_engine()
+        result.documents = [engine.redact_document(d) for d in result.documents]
     sources = list({d.get("source", "unknown") for d in result.documents})
     return QueryResponse(
         query=result.query,
@@ -245,6 +286,91 @@ async def query_stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/agentic-query")
+async def agentic_query(request: AgenticQueryRequest) -> dict:
+    """Agentic Corrective-RAG query with routing + self-correction.
+
+    Routes the query (factual / creative / code), runs the corrective
+    retrieval loop until relevance is sufficient or max iterations are hit,
+    and redacts PII/PHI from returned documents (ingestion + retrieval layer
+    protection). Returns documents plus a full correction trace.
+    """
+    gov = get_governance()
+    if gov is not None:
+        try:
+            await gov.inspect_query(request.query)
+        except GovernanceError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
+
+    pipeline = get_agentic()
+    out = pipeline.run(
+        query=request.query,
+        top_k=request.top_k,
+        redact=request.redact,
+    )
+    return {
+        "query": out.original_query,
+        "final_query": out.final_query,
+        "route": out.route.route,
+        "route_confidence": out.route.confidence,
+        "route_rationale": out.route.rationale,
+        "accepted": out.accepted,
+        "iterations": out.iterations,
+        "relevance_score": out.relevance_score,
+        "redacted": out.redacted,
+        "total_time_ms": out.total_time_ms,
+        "documents": out.documents,
+        "fused_scores": out.fused_scores,
+        "trace": [
+            {
+                "iteration": t.iteration,
+                "query": t.query,
+                "route": t.route,
+                "documents_retrieved": t.documents_retrieved,
+                "relevance_score": t.relevance_score,
+                "decision": t.decision,
+                "rewritten_from": t.rewritten_from,
+            }
+            for t in out.trace
+        ],
+    }
+
+
+@app.post("/ingest")
+async def ingest(request: IngestRequest) -> dict:
+    """Ingest documents with PII/PHI redaction on the ingestion layer.
+
+    Documents are redacted before they enter the BM25 index, so raw secrets
+    never land in the retrieval corpus. Vector (Qdrant) ingestion is outside
+    the scope of this service; redact text before upserting there as well.
+    """
+    engine = get_redaction_engine()
+    retriever = get_retriever()
+
+    ingested = []
+    total_findings = 0
+    for doc in request.documents:
+        text_out = engine.redact(doc.text)
+        total_findings += text_out.redacted_count
+        safe_doc = {
+            "id": doc.id,
+            "text": text_out.result,
+            "metadata": {
+                k: engine.redact(v).result if isinstance(v, str) else v
+                for k, v in (doc.metadata or {}).items()
+            },
+            "source": "ingest",
+        }
+        retriever.add_bm25_documents([safe_doc["text"]])
+        ingested.append({**safe_doc, "findings": [f.type for f in text_out.findings]})
+
+    return {
+        "ingested": len(ingested),
+        "total_redaction_findings": total_findings,
+        "documents": ingested,
+    }
 
 
 @app.get("/")

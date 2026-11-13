@@ -107,6 +107,9 @@ curl -N -X POST http://localhost:8000/query/stream \
 | **Evaluation** | RAGAS: faithfulness, answer_relevancy, context_precision, context_recall |
 | **Streaming** | SSE for real-time token delivery |
 | **Observability** | Structured logs, metrics, health endpoints |
+| **Agentic Corrective RAG** | Self-correction loop on low relevance (route → retrieve → grade → rewrite → re-retrieve) |
+| **Query Routing** | factual / creative / code routes with per-route top-k |
+| **PII/PHI Redaction** | Ingestion + retrieval layer redaction (email, phone, SSN, IBAN, MRN, API keys, credit cards, DOB, IP) |
 
 ---
 
