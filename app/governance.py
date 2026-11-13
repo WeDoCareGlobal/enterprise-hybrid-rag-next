@@ -31,7 +31,7 @@ class OmniGuardGovernance:
         api_key: Optional[str] = None,
         timeout: float = 10.0,
     ):
-        self.base_url = (base_url or os.environ.get("OMNIGUARD_BASE_URL", "http://localhost:8000/v1")).rstrip("/")
+        self.base_url = (base_url or os.environ.get("OMNIGUARD_BASE_URL") or "http://localhost:8000/v1").rstrip("/")
         key = api_key or os.environ.get("OMNIGUARD_API_KEY")
         if key is None:
             raise ValueError("OMNIGUARD_API_KEY not configured")
