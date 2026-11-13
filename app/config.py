@@ -134,6 +134,95 @@ class RagasConfig(BaseModel):
         return v
 
 
+class RedactionConfig(BaseModel):
+    """PII/PHI redaction configuration for ingestion and retrieval layers."""
+
+    enabled: bool = Field(default=True, description="Enable PII/PHI redaction")
+    mode: str = Field(
+        default="REDACT",
+        description="REDACT | HASH | NONE (findings still reported)",
+    )
+    store_raw_values: bool = Field(
+        default=False,
+        description="Keep raw matched values in findings (audit use only)",
+    )
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        if v not in ("REDACT", "HASH", "NONE"):
+            raise ValueError(f"Redaction mode must be REDACT/HASH/NONE, got {v}")
+        return v
+
+    @classmethod
+    def from_env(cls) -> RedactionConfig:
+        return cls(
+            enabled=os.environ.get("REDACTION_ENABLED", "true").lower() == "true",
+            mode=os.environ.get("REDACTION_MODE", "REDACT"),
+            store_raw_values=os.environ.get("REDACTION_STORE_RAW", "false").lower()
+            == "true",
+        )
+
+
+class QueryRouterConfig(BaseModel):
+    """Query router configuration (factual / creative / code)."""
+
+    enabled: bool = Field(default=True, description="Enable query routing")
+    creative_top_k: int = Field(default=12, description="Top-k for creative route")
+    code_top_k: int = Field(default=10, description="Top-k for code route")
+    factual_top_k: int = Field(default=10, description="Top-k for factual route")
+
+    @classmethod
+    def from_env(cls) -> QueryRouterConfig:
+        return cls(
+            enabled=os.environ.get("QUERY_ROUTER_ENABLED", "true").lower() == "true",
+            creative_top_k=int(os.environ.get("QR_CREATIVE_TOP_K", "12")),
+            code_top_k=int(os.environ.get("QR_CODE_TOP_K", "10")),
+            factual_top_k=int(os.environ.get("QR_FACTUAL_TOP_K", "10")),
+        )
+
+
+class CorrectiveRAGConfig(BaseModel):
+    """Corrective (self-correcting) RAG loop configuration."""
+
+    enabled: bool = Field(default=True, description="Enable corrective RAG loop")
+    max_iterations: int = Field(
+        default=3, description="Maximum rewrite + re-retrieve iterations"
+    )
+    relevance_threshold: float = Field(
+        default=0.25,
+        description="Minimum relevance grade to accept retrieval (0.0-1.0)",
+    )
+    min_documents: int = Field(
+        default=1, description="Minimum documents required to accept a pass"
+    )
+
+    @field_validator("relevance_threshold")
+    @classmethod
+    def validate_threshold(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError(f"relevance_threshold must be between 0.0 and 1.0, got {v}")
+        return v
+
+    @field_validator("max_iterations")
+    @classmethod
+    def validate_max_iterations(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError(f"max_iterations must be >= 1, got {v}")
+        return v
+
+    @classmethod
+    def from_env(cls) -> CorrectiveRAGConfig:
+        return cls(
+            enabled=os.environ.get("CORRECTIVE_RAG_ENABLED", "true").lower() == "true",
+            max_iterations=int(os.environ.get("CORRECTIVE_MAX_ITERATIONS", "3")),
+            relevance_threshold=float(
+                os.environ.get("CORRECTIVE_RELEVANCE_THRESHOLD", "0.25")
+            ),
+            min_documents=int(os.environ.get("CORRECTIVE_MIN_DOCUMENTS", "1")),
+        )
+
+
 class AppConfig(BaseModel):
     """Top-level application configuration."""
 
@@ -147,6 +236,10 @@ class AppConfig(BaseModel):
     # Retrieval parameters
     default_top_k: int = Field(default=10, description="Default number of results")
     max_top_k: int = Field(default=50, description="Maximum number of results")
+    # Agentic RAG sections
+    redaction: RedactionConfig = Field(default_factory=RedactionConfig)
+    query_router: QueryRouterConfig = Field(default_factory=QueryRouterConfig)
+    corrective_rag: CorrectiveRAGConfig = Field(default_factory=CorrectiveRAGConfig)
     # Server configuration
     host: str = Field(default="0.0.0.0", description="Server host")  # nosec: B104 - intentional bind-all for server accessibility
     port: int = Field(default=8000, description="Server port")
@@ -204,8 +297,13 @@ class AppConfig(BaseModel):
             max_top_k=int(os.environ.get("MAX_TOP_K", "50")),
             host=os.environ.get("HOST", "0.0.0.0"),  # nosec: B104 - intentional bind-all for server accessibility
             port=int(os.environ.get("PORT", "8000")),
+            redaction=RedactionConfig.from_env(),
+            query_router=QueryRouterConfig.from_env(),
+            corrective_rag=CorrectiveRAGConfig.from_env(),
         )
 
 
+# Global configuration instance
+config = AppConfig.from_env()
 # Global configuration instance
 config = AppConfig.from_env()
